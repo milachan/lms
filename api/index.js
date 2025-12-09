@@ -5,59 +5,32 @@ const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
 
-// Data storage (JSON file)
-const DATA_FILE = path.join(__dirname, '..', 'data', 'students.json');
-const LOGS_FILE = path.join(__dirname, '..', 'data', 'login-logs.json');
+// In-memory storage (untuk Vercel serverless - data akan reset setiap deployment)
+let studentsData = [
+  { id: 1, name: "Ahmad Rifai", username: "ahmad.rifai", class: "XII IPA 1", active: true },
+  { id: 2, name: "Siti Nurhaliza", username: "siti.nurhaliza", class: "XII IPA 1", active: true },
+  { id: 3, name: "Budi Santoso", username: "budi.santoso", class: "XII IPA 2", active: true },
+  { id: 4, name: "Dewi Lestari", username: "dewi.lestari", class: "XII IPS 1", active: true },
+  { id: 5, name: "Eko Prasetyo", username: "eko.prasetyo", class: "XII IPS 2", active: true },
+  { id: 6, name: "Rina Wati", username: "rina.wati", class: "XII IPA 1", active: true },
+  { id: 7, name: "Joko Widodo", username: "joko.widodo", class: "XII IPA 2", active: true },
+  { id: 8, name: "Maya Sari", username: "maya.sari", class: "XII IPS 1", active: true },
+  { id: 9, name: "Agus Salim", username: "agus.salim", class: "XII IPS 2", active: true },
+  { id: 10, name: "Putri Ayu", username: "putri.ayu", class: "XII IPA 1", active: true }
+];
 
-// Initialize data files
-const initDataFiles = () => {
-  const dataDir = path.join(__dirname, '..', 'data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
-  }
-  
-  if (!fs.existsSync(DATA_FILE)) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify([
-      { id: 1, name: "Ahmad Rifai", username: "ahmad.rifai", class: "XII IPA 1", active: true },
-      { id: 2, name: "Siti Nurhaliza", username: "siti.nurhaliza", class: "XII IPA 1", active: true },
-      { id: 3, name: "Budi Santoso", username: "budi.santoso", class: "XII IPA 2", active: true },
-      { id: 4, name: "Dewi Lestari", username: "dewi.lestari", class: "XII IPS 1", active: true },
-      { id: 5, name: "Eko Prasetyo", username: "eko.prasetyo", class: "XII IPS 2", active: true }
-    ], null, 2));
-  }
-  
-  if (!fs.existsSync(LOGS_FILE)) {
-    fs.writeFileSync(LOGS_FILE, JSON.stringify([], null, 2));
-  }
-};
-
-initDataFiles();
+let loginLogs = [];
 
 // Helper functions
-const readStudents = () => {
-  const data = fs.readFileSync(DATA_FILE, 'utf8');
-  return JSON.parse(data);
-};
-
-const writeStudents = (students) => {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(students, null, 2));
-};
-
-const readLogs = () => {
-  const data = fs.readFileSync(LOGS_FILE, 'utf8');
-  return JSON.parse(data);
-};
-
-const writeLogs = (logs) => {
-  fs.writeFileSync(LOGS_FILE, JSON.stringify(logs, null, 2));
-};
+const readStudents = () => studentsData;
+const writeStudents = (students) => { studentsData = students; };
+const readLogs = () => loginLogs;
+const writeLogs = (logs) => { loginLogs = logs; };
 
 // API Routes
 
@@ -259,15 +232,15 @@ app.get('/api/health', (req, res) => {
 });
 
 // Serve admin dashboard
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Exam Admin API running on http://localhost:${PORT}`);
-  console.log(`📊 Admin Dashboard: http://localhost:${PORT}`);
-  console.log(`🔌 API Endpoint: http://localhost:${PORT}/api`);
-});
-
+// Export for Vercel serverless
 module.exports = app;
+
+// Local development server
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🚀 Exam Admin API running on http://localhost:${PORT}`);
+    console.log(`📊 Admin Dashboard: http://localhost:${PORT}`);
+    console.log(`🔌 API Endpoint: http://localhost:${PORT}/api`);
+  });
+}
