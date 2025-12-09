@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Login Siswa - EXAMBROWSER</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .search-box {
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 20px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .search-box input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .students-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .student-card {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            margin-bottom: 15px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .student-card:active {
+            transform: scale(0.98);
+            box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+
+        .student-avatar {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+
+        .student-info {
+            flex: 1;
+        }
+
+        .student-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .student-details {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .student-username {
+            color: #667eea;
+            font-weight: 500;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .empty-state svg {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: white;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background: #f56565;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .retry-btn {
+            background: white;
+            color: #f56565;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+
+        .success-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .success-overlay.active {
+            display: flex;
+        }
+
+        .success-card {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            max-width: 90%;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: #48bb78;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+
+        .success-icon svg {
+            width: 50px;
+            height: 50px;
+            stroke: white;
+        }
+
+        .success-card h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .success-card p {
+            color: #666;
+            margin-bottom: 20px;
+        }
+
+        .proceed-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎓 Login Siswa</h1>
+        <p>Pilih nama Anda untuk masuk ke ujian</p>
+    </div>
+
+    <div class="search-box" id="searchBox" style="display: none;">
+        <input type="text" id="searchInput" placeholder="🔍 Cari nama atau username...">
+    </div>
+
+    <div class="students-list" id="studentsList">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Memuat data siswa...</p>
+        </div>
+    </div>
+
+    <div class="success-overlay" id="successOverlay">
+        <div class="success-card">
+            <div class="success-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+                </svg>
+            </div>
+            <h2>Login Berhasil!</h2>
+            <p id="successMessage">Selamat datang, <strong id="studentNameDisplay"></strong></p>
+            <button class="proceed-btn" onclick="proceedToExam()">Lanjutkan ke Ujian →</button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - Production API URL
+        const API_URL = 'https://lms-lens-projects-e9cc8729.vercel.app/api';
+
+        let allStudents = [];
+        let selectedStudent = null;
+
+        // URLSearchParams untuk redirect URL dari APK
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectUrl = urlParams.get('redirect') || 'exam://cbt1'; // Default redirect
+
+        // Load students on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadStudents();
+
+            // Search functionality
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                filterStudents(e.target.value);
+            });
+        });
+
+        // Load students from API
+        async function loadStudents() {
+            try {
+                const response = await fetch(`${API_URL}/students/active`);
+                const result = await response.json();
+
+                if (result.success && result.data) {
+                    allStudents = result.data;
+                    renderStudents(allStudents);
+                    document.getElementById('searchBox').style.display = 'block';
+                } else {
+                    showError('Gagal memuat data siswa');
+                }
+            } catch (error) {
+                console.error('Error loading students:', error);
+                showError(`Tidak dapat terhubung ke server<br><small>API URL: ${API_URL}</small>`);
+            }
+        }
+
+        // Render students list
+        function renderStudents(students) {
+            const container = document.getElementById('studentsList');
+
+            if (students.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                        <h3>Tidak ada siswa ditemukan</h3>
+                        <p>Coba kata kunci lain</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = students.map(student => {
+                const initial = student.name.charAt(0).toUpperCase();
+                return `
+                    <div class="student-card" onclick='selectStudent(${JSON.stringify(student)})'>
+                        <div class="student-avatar">${initial}</div>
+                        <div class="student-info">
+                            <div class="student-name">${student.name}</div>
+                            <div class="student-details">
+                                <span class="student-username">@${student.username}</span> • ${student.class}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+        }
+
+        // Filter students by search query
+        function filterStudents(query) {
+            const filtered = allStudents.filter(s => 
+                s.name.toLowerCase().includes(query.toLowerCase()) ||
+                s.username.toLowerCase().includes(query.toLowerCase()) ||
+                s.class.toLowerCase().includes(query.toLowerCase())
+            );
+            renderStudents(filtered);
+        }
+
+        // Show error message
+        function showError(message) {
+            const container = document.getElementById('studentsList');
+            container.innerHTML = `
+                <div class="error-message">
+                    <strong>❌ Error</strong><br>
+                    ${message}
+                    <br>
+                    <button class="retry-btn" onclick="loadStudents()">🔄 Coba Lagi</button>
+                </div>
+            `;
+        }
+
+        // Select student and proceed
+        async function selectStudent(student) {
+            try {
+                selectedStudent = student;
+
+                // Show loading
+                document.getElementById('studentsList').innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <p>Login sebagai ${student.name}...</p>
+                    </div>
+                `;
+
+                // Get device info
+                const deviceInfo = `${navigator.userAgent} | Screen: ${window.screen.width}x${window.screen.height}`;
+
+                // Record login to API
+                await fetch(`${API_URL}/login-logs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        studentId: student.id,
+                        studentName: student.name,
+                        username: student.username,
+                        timestamp: new Date().toISOString(),
+                        deviceInfo: deviceInfo
+                    })
+                });
+
+                // Save to sessionStorage for persistence
+                sessionStorage.setItem('currentStudent', JSON.stringify({
+                    id: student.id,
+                    name: student.name,
+                    username: student.username,
+                    loginTime: new Date().toISOString()
+                }));
+
+                // Show success overlay
+                document.getElementById('studentNameDisplay').textContent = student.name;
+                document.getElementById('successOverlay').classList.add('active');
+
+            } catch (error) {
+                console.error('Error selecting student:', error);
+                showError('Gagal mencatat login. Silakan coba lagi.');
+            }
+        }
+
+        // Proceed to exam
+        function proceedToExam() {
+            if (!selectedStudent) return;
+
+            // Untuk WebView di APK, redirect ke custom URL scheme
+            if (window.location.href.includes('file://') || window.location.href.includes('android_asset')) {
+                // Running inside APK WebView
+                window.location.href = redirectUrl;
+            } else {
+                // Running in browser (testing)
+                alert(`✓ Login berhasil sebagai ${selectedStudent.name}!\n\nDalam APK sebenarnya, Anda akan diarahkan ke menu ujian.`);
+                // Simulate redirect
+                console.log('Redirecting to:', redirectUrl);
+                console.log('Student data:', sessionStorage.getItem('currentStudent'));
+            }
+        }
+
+        // Check if already logged in
+        const currentStudent = sessionStorage.getItem('currentStudent');
+        if (currentStudent) {
+            const student = JSON.parse(currentStudent);
+            console.log('Session found - Already logged in as:', student);
+            // Optional: Auto-show success screen jika masih dalam session yang sama
+        }
+    </script>
+</body>
+</html>

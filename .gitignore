@@ -1,0 +1,17 @@
+node_modules/
+.env
+.vercel
+data/
+*.log
+
+# APK Files (too large for git)
+*.apk
+*.zip
+*.jar
+EXAMBROWSER_decoded/
+EXAMBROWSER_extracted/
+my-release-key.jks
+
+# Temporary folders
+suara/
+exam-admin/
