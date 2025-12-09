@@ -25,6 +25,7 @@ let studentsData = [
 ];
 
 let loginLogs = [];
+let activeSessions = {}; // { studentId: { deviceId, timestamp, sessionId } }
 
 // Helper functions
 const readStudents = () => studentsData;
@@ -165,11 +166,29 @@ app.delete('/api/students/:id', (req, res) => {
   }
 });
 
-// Record student login
+// Record student login with session management
 app.post('/api/login-logs', (req, res) => {
   try {
     const logs = readLogs();
-    const { studentId, studentName, username, timestamp, deviceInfo } = req.body;
+    const { studentId, studentName, username, timestamp, deviceInfo, deviceId } = req.body;
+    
+    // Generate unique session ID
+    const sessionId = `${studentId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Check if student already has active session on different device
+    const existingSession = activeSessions[studentId];
+    if (existingSession && existingSession.deviceId !== deviceId) {
+      // Force logout previous device
+      console.log(`Force logout student ${studentId} from device ${existingSession.deviceId}`);
+    }
+    
+    // Create new session
+    activeSessions[studentId] = {
+      deviceId: deviceId || 'unknown',
+      timestamp: new Date().toISOString(),
+      sessionId: sessionId,
+      studentName: studentName
+    };
     
     const newLog = {
       id: logs.length > 0 ? Math.max(...logs.map(l => l.id)) + 1 : 1,
@@ -177,13 +196,21 @@ app.post('/api/login-logs', (req, res) => {
       studentName,
       username,
       timestamp: timestamp || new Date().toISOString(),
-      deviceInfo: deviceInfo || 'Unknown Device'
+      deviceInfo: deviceInfo || 'Unknown Device',
+      deviceId: deviceId || 'unknown',
+      sessionId: sessionId,
+      action: 'login'
     };
     
     logs.push(newLog);
     writeLogs(logs);
     
-    res.json({ success: true, data: newLog });
+    res.json({ 
+      success: true, 
+      data: newLog,
+      sessionId: sessionId,
+      lmsUrl: 'https://lms.mtsn2kebumen.sch.id/login/index.php'
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -197,6 +224,89 @@ app.get('/api/login-logs', (req, res) => {
     const filtered = logs.slice(-limit).reverse(); // Get latest logs
     
     res.json({ success: true, data: filtered });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Check session status
+app.post('/api/check-session', (req, res) => {
+  try {
+    const { studentId, deviceId, sessionId } = req.body;
+    
+    const activeSession = activeSessions[studentId];
+    
+    if (!activeSession) {
+      return res.json({ 
+        success: false, 
+        active: false, 
+        message: 'No active session' 
+      });
+    }
+    
+    // Check if this device's session is still active
+    if (activeSession.sessionId === sessionId && activeSession.deviceId === deviceId) {
+      return res.json({ 
+        success: true, 
+        active: true,
+        session: activeSession
+      });
+    } else {
+      return res.json({ 
+        success: false, 
+        active: false, 
+        message: 'Session expired or logged in from another device',
+        currentDevice: activeSession.deviceId
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Logout student
+app.post('/api/logout', (req, res) => {
+  try {
+    const { studentId, sessionId, deviceId } = req.body;
+    
+    const activeSession = activeSessions[studentId];
+    
+    if (activeSession && activeSession.sessionId === sessionId) {
+      delete activeSessions[studentId];
+      
+      // Log logout event
+      const logs = readLogs();
+      logs.push({
+        id: logs.length > 0 ? Math.max(...logs.map(l => l.id)) + 1 : 1,
+        studentId,
+        studentName: activeSession.studentName,
+        timestamp: new Date().toISOString(),
+        deviceInfo: deviceId || 'unknown',
+        deviceId: deviceId || 'unknown',
+        sessionId: sessionId,
+        action: 'logout'
+      });
+      writeLogs(logs);
+      
+      return res.json({ success: true, message: 'Logged out successfully' });
+    }
+    
+    res.json({ success: false, message: 'No active session found' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get active sessions
+app.get('/api/active-sessions', (req, res) => {
+  try {
+    res.json({ 
+      success: true, 
+      data: Object.entries(activeSessions).map(([studentId, session]) => ({
+        studentId: parseInt(studentId),
+        ...session
+      }))
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -272,13 +272,28 @@
     <script>
         // Configuration - Production API URL
         const API_URL = 'https://lms-lens-projects-e9cc8729.vercel.app/api';
+        const LMS_URL = 'https://lms.mtsn2kebumen.sch.id/login/index.php';
 
         let allStudents = [];
         let selectedStudent = null;
+        let currentSessionId = null;
+        let sessionCheckInterval = null;
+
+        // Generate unique device ID (persistent)
+        function getDeviceId() {
+            let deviceId = localStorage.getItem('deviceId');
+            if (!deviceId) {
+                deviceId = 'device_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('deviceId', deviceId);
+            }
+            return deviceId;
+        }
+
+        const DEVICE_ID = getDeviceId();
 
         // URLSearchParams untuk redirect URL dari APK
         const urlParams = new URLSearchParams(window.location.search);
-        const redirectUrl = urlParams.get('redirect') || 'exam://cbt1'; // Default redirect
+        const redirectUrl = urlParams.get('redirect') || LMS_URL; // Default redirect ke LMS
 
         // Load students on page load
         document.addEventListener('DOMContentLoaded', () => {
@@ -384,8 +399,8 @@
                 // Get device info
                 const deviceInfo = `${navigator.userAgent} | Screen: ${window.screen.width}x${window.screen.height}`;
 
-                // Record login to API
-                await fetch(`${API_URL}/login-logs`, {
+                // Record login to API with device ID
+                const loginResponse = await fetch(`${API_URL}/login-logs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -393,17 +408,31 @@
                         studentName: student.name,
                         username: student.username,
                         timestamp: new Date().toISOString(),
-                        deviceInfo: deviceInfo
+                        deviceInfo: deviceInfo,
+                        deviceId: DEVICE_ID
                     })
                 });
 
-                // Save to sessionStorage for persistence
-                sessionStorage.setItem('currentStudent', JSON.stringify({
-                    id: student.id,
-                    name: student.name,
-                    username: student.username,
-                    loginTime: new Date().toISOString()
-                }));
+                const loginResult = await loginResponse.json();
+                
+                if (loginResult.success) {
+                    currentSessionId = loginResult.sessionId;
+                    
+                    // Save to localStorage for persistence
+                    localStorage.setItem('currentSession', JSON.stringify({
+                        studentId: student.id,
+                        studentName: student.name,
+                        username: student.username,
+                        sessionId: currentSessionId,
+                        deviceId: DEVICE_ID,
+                        loginTime: new Date().toISOString()
+                    }));
+                    
+                    // Start session monitoring
+                    startSessionMonitoring();
+                } else {
+                    throw new Error('Login failed');
+                }
 
                 // Show success overlay
                 document.getElementById('studentNameDisplay').textContent = student.name;
@@ -415,29 +444,123 @@
             }
         }
 
-        // Proceed to exam
+        // Proceed to exam (redirect ke LMS)
         function proceedToExam() {
             if (!selectedStudent) return;
 
-            // Untuk WebView di APK, redirect ke custom URL scheme
-            if (window.location.href.includes('file://') || window.location.href.includes('android_asset')) {
-                // Running inside APK WebView
-                window.location.href = redirectUrl;
-            } else {
-                // Running in browser (testing)
-                alert(`✓ Login berhasil sebagai ${selectedStudent.name}!\n\nDalam APK sebenarnya, Anda akan diarahkan ke menu ujian.`);
-                // Simulate redirect
-                console.log('Redirecting to:', redirectUrl);
-                console.log('Student data:', sessionStorage.getItem('currentStudent'));
+            // Redirect langsung ke LMS MTs N 2 Kebumen
+            console.log('Redirecting to LMS:', LMS_URL);
+            console.log('Session:', currentSessionId);
+            
+            // Redirect to LMS
+            window.location.href = LMS_URL;
+        }
+
+        // Session monitoring - check every 30 seconds
+        function startSessionMonitoring() {
+            // Clear existing interval
+            if (sessionCheckInterval) {
+                clearInterval(sessionCheckInterval);
+            }
+
+            // Check session every 30 seconds
+            sessionCheckInterval = setInterval(async () => {
+                await checkSessionStatus();
+            }, 30000); // 30 seconds
+        }
+
+        // Check if session is still active
+        async function checkSessionStatus() {
+            try {
+                const session = JSON.parse(localStorage.getItem('currentSession') || '{}');
+                if (!session.sessionId) return;
+
+                const response = await fetch(`${API_URL}/check-session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        studentId: session.studentId,
+                        deviceId: DEVICE_ID,
+                        sessionId: session.sessionId
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!result.active) {
+                    // Session expired or logged in from another device
+                    console.log('Session expired:', result.message);
+                    handleSessionExpired(result.message);
+                }
+            } catch (error) {
+                console.error('Error checking session:', error);
             }
         }
 
+        // Handle session expired
+        function handleSessionExpired(message) {
+            // Clear session
+            localStorage.removeItem('currentSession');
+            clearInterval(sessionCheckInterval);
+
+            // Show alert and reload
+            alert(`⚠️ Sesi Anda telah berakhir\n\n${message}\n\nSilakan login kembali.`);
+            window.location.reload();
+        }
+
+        // Logout function (dipanggil saat keluar dari WebView)
+        async function logout() {
+            try {
+                const session = JSON.parse(localStorage.getItem('currentSession') || '{}');
+                if (!session.sessionId) return;
+
+                await fetch(`${API_URL}/logout`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        studentId: session.studentId,
+                        sessionId: session.sessionId,
+                        deviceId: DEVICE_ID
+                    })
+                });
+
+                // Clear local data
+                localStorage.removeItem('currentSession');
+                clearInterval(sessionCheckInterval);
+                
+                console.log('Logged out successfully');
+            } catch (error) {
+                console.error('Error logging out:', error);
+            }
+        }
+
+        // Detect page unload (keluar dari WebView atau tutup tab)
+        window.addEventListener('beforeunload', (e) => {
+            logout();
+        });
+
+        // Detect visibility change (app goes to background)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // App in background - logout
+                logout();
+            }
+        });
+
         // Check if already logged in
-        const currentStudent = sessionStorage.getItem('currentStudent');
-        if (currentStudent) {
-            const student = JSON.parse(currentStudent);
-            console.log('Session found - Already logged in as:', student);
-            // Optional: Auto-show success screen jika masih dalam session yang sama
+        const existingSession = localStorage.getItem('currentSession');
+        if (existingSession) {
+            const session = JSON.parse(existingSession);
+            console.log('Session found - Already logged in as:', session.studentName);
+            console.log('Session ID:', session.sessionId);
+            console.log('Device ID:', session.deviceId);
+            
+            // Verify session is still active
+            checkSessionStatus();
+            startSessionMonitoring();
+            
+            // Optional: Auto redirect ke LMS jika session masih aktif
+            // window.location.href = LMS_URL;
         }
     </script>
 </body>

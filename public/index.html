@@ -384,6 +384,9 @@
                 <button class="tab-btn active" onclick="switchTab('students')">
                     👥 Data Siswa
                 </button>
+                <button class="tab-btn" onclick="switchTab('sessions')">
+                    🔐 Sesi Aktif
+                </button>
                 <button class="tab-btn" onclick="switchTab('logs')">
                     📊 Log Aktivitas
                 </button>
@@ -400,6 +403,17 @@
                 </div>
 
                 <div id="studentsTable"></div>
+            </div>
+
+            <!-- Sessions Tab -->
+            <div id="sessions-tab" class="tab-content">
+                <div style="padding: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0;">🔐 Sesi Login Aktif</h3>
+                        <button class="btn btn-secondary" onclick="loadActiveSessions()">🔄 Refresh</button>
+                    </div>
+                    <div id="sessionsTable"></div>
+                </div>
             </div>
 
             <!-- Logs Tab -->
@@ -488,7 +502,9 @@
             event.target.classList.add('active');
             document.getElementById(`${tab}-tab`).classList.add('active');
 
-            if (tab === 'logs') {
+            if (tab === 'sessions') {
+                loadActiveSessions();
+            } else if (tab === 'logs') {
                 loadLogs();
             }
         }
@@ -592,6 +608,77 @@
         // Filter students
         function filterStudents(search) {
             loadStudents(search);
+        }
+
+        // Load active sessions
+        async function loadActiveSessions() {
+            try {
+                const response = await fetch(`${API_URL}/active-sessions`);
+                const result = await response.json();
+
+                if (result.success) {
+                    renderActiveSessions(result.data);
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+                document.getElementById('sessionsTable').innerHTML = 
+                    '<div class="empty-state">❌ Gagal memuat sesi aktif</div>';
+            }
+        }
+
+        // Render active sessions
+        function renderActiveSessions(sessions) {
+            const container = document.getElementById('sessionsTable');
+
+            if (sessions.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width: 64px; height: 64px; margin: 0 auto 20px;">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        <h3>Tidak ada sesi aktif</h3>
+                        <p>Sesi akan muncul ketika siswa login melalui aplikasi</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Siswa</th>
+                            <th>Device ID</th>
+                            <th>Waktu Login</th>
+                            <th>Session ID</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${sessions.map(session => `
+                            <tr>
+                                <td>
+                                    <strong>${session.studentName}</strong>
+                                    <br><small style="color: #999;">ID: ${session.studentId}</small>
+                                </td>
+                                <td>
+                                    <code style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                        ${session.deviceId.substring(0, 20)}...
+                                    </code>
+                                </td>
+                                <td>${new Date(session.timestamp).toLocaleString('id-ID')}</td>
+                                <td>
+                                    <code style="background: #e7f3ff; padding: 4px 8px; border-radius: 4px; font-size: 11px; color: #0066cc;">
+                                        ${session.sessionId.substring(0, 25)}...
+                                    </code>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            container.innerHTML = html;
         }
 
         // Load logs
