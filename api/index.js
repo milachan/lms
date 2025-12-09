@@ -27,6 +27,19 @@ let studentsData = [
 let loginLogs = [];
 let activeSessions = {}; // { studentId: { deviceId, timestamp, sessionId } }
 
+// Exam Lock Configuration
+let examConfig = {
+  isLocked: false,
+  examName: "Ujian Tengah Semester",
+  startTime: null,  // ISO string
+  endTime: null,    // ISO string
+  emergencyPassword: "admin123",  // Password darurat untuk keluar
+  allowRefresh: false,
+  allowBack: false,
+  createdAt: new Date().toISOString(),
+  updatedBy: "admin"
+};
+
 // Helper functions
 const readStudents = () => studentsData;
 const writeStudents = (students) => { studentsData = students; };
@@ -331,6 +344,127 @@ app.get('/api/stats', (req, res) => {
     };
     
     res.json({ success: true, data: stats });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// ==================== EXAM LOCK MANAGEMENT ====================
+
+// Get exam lock configuration
+app.get('/api/exam-config', (req, res) => {
+  try {
+    // Calculate if exam is currently active
+    const now = new Date();
+    const isActive = examConfig.isLocked && 
+                     examConfig.startTime && 
+                     examConfig.endTime &&
+                     now >= new Date(examConfig.startTime) &&
+                     now <= new Date(examConfig.endTime);
+    
+    res.json({ 
+      success: true, 
+      data: {
+        ...examConfig,
+        isActive: isActive,
+        currentTime: now.toISOString()
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update exam lock configuration
+app.put('/api/exam-config', (req, res) => {
+  try {
+    const { isLocked, examName, startTime, endTime, emergencyPassword, allowRefresh, allowBack } = req.body;
+    
+    // Validate times
+    if (startTime && endTime) {
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      
+      if (start >= end) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Waktu mulai harus lebih awal dari waktu selesai' 
+        });
+      }
+    }
+    
+    // Update configuration
+    if (isLocked !== undefined) examConfig.isLocked = isLocked;
+    if (examName) examConfig.examName = examName;
+    if (startTime) examConfig.startTime = startTime;
+    if (endTime) examConfig.endTime = endTime;
+    if (emergencyPassword) examConfig.emergencyPassword = emergencyPassword;
+    if (allowRefresh !== undefined) examConfig.allowRefresh = allowRefresh;
+    if (allowBack !== undefined) examConfig.allowBack = allowBack;
+    
+    examConfig.updatedAt = new Date().toISOString();
+    
+    res.json({ 
+      success: true, 
+      data: examConfig,
+      message: 'Konfigurasi ujian berhasil diupdate' 
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Verify emergency password
+app.post('/api/verify-emergency-password', (req, res) => {
+  try {
+    const { password } = req.body;
+    
+    if (password === examConfig.emergencyPassword) {
+      // Log emergency exit
+      const logs = readLogs();
+      logs.push({
+        id: logs.length > 0 ? Math.max(...logs.map(l => l.id)) + 1 : 1,
+        action: 'emergency_exit',
+        timestamp: new Date().toISOString(),
+        message: 'Emergency password used to exit exam'
+      });
+      writeLogs(logs);
+      
+      res.json({ 
+        success: true, 
+        verified: true,
+        message: 'Password darurat benar' 
+      });
+    } else {
+      res.json({ 
+        success: false, 
+        verified: false,
+        message: 'Password darurat salah' 
+      });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Quick lock/unlock exam
+app.post('/api/exam-lock', (req, res) => {
+  try {
+    const { action } = req.body; // "lock" or "unlock"
+    
+    if (action === 'lock') {
+      examConfig.isLocked = true;
+    } else if (action === 'unlock') {
+      examConfig.isLocked = false;
+    }
+    
+    examConfig.updatedAt = new Date().toISOString();
+    
+    res.json({ 
+      success: true, 
+      data: examConfig,
+      message: `Ujian berhasil ${action === 'lock' ? 'dikunci' : 'dibuka'}` 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -384,6 +384,9 @@
                 <button class="tab-btn active" onclick="switchTab('students')">
                     👥 Data Siswa
                 </button>
+                <button class="tab-btn" onclick="switchTab('examlock')">
+                    🔒 Kunci Ujian
+                </button>
                 <button class="tab-btn" onclick="switchTab('sessions')">
                     🔐 Sesi Aktif
                 </button>
@@ -403,6 +406,96 @@
                 </div>
 
                 <div id="studentsTable"></div>
+            </div>
+
+            <!-- Exam Lock Tab -->
+            <div id="examlock-tab" class="tab-content">
+                <div style="padding: 30px;">
+                    <h2 style="color: #667eea; margin-bottom: 20px;">🔒 Pengaturan Kunci Ujian</h2>
+                    
+                    <!-- Status Card -->
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 15px; color: white; margin-bottom: 30px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <h3 style="margin: 0 0 10px 0; font-size: 24px;">Status Ujian</h3>
+                                <p id="examStatusText" style="margin: 0; font-size: 16px; opacity: 0.9;">Loading...</p>
+                            </div>
+                            <div>
+                                <button id="quickLockBtn" class="btn" style="background: white; color: #667eea; font-size: 16px; padding: 12px 30px;" onclick="quickToggleLock()">
+                                    🔒 Loading...
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Configuration Form -->
+                    <div style="background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
+                        <h3 style="margin-bottom: 20px; color: #333;">⚙️ Konfigurasi Ujian</h3>
+                        
+                        <form id="examConfigForm">
+                            <div class="form-group">
+                                <label>📝 Nama Ujian</label>
+                                <input type="text" id="examName" placeholder="Contoh: Ujian Tengah Semester Gasal 2025" required>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                                <div class="form-group">
+                                    <label>⏰ Waktu Mulai</label>
+                                    <input type="datetime-local" id="startTime" required>
+                                </div>
+
+                                <div class="form-group">
+                                    <label>⏱️ Waktu Selesai</label>
+                                    <input type="datetime-local" id="endTime" required>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>🔑 Password Darurat (untuk keluar paksa)</label>
+                                <input type="password" id="emergencyPassword" placeholder="Minimal 6 karakter" required>
+                                <small style="color: #999; margin-top: 5px; display: block;">Password ini digunakan siswa untuk keluar darurat jika ada masalah</small>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" id="allowRefresh" style="width: 20px; height: 20px; margin-right: 10px;">
+                                        <span>🔄 Izinkan Refresh Halaman</span>
+                                    </label>
+                                </div>
+
+                                <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+                                    <label style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" id="allowBack" style="width: 20px; height: 20px; margin-right: 10px;">
+                                        <span>⬅️ Izinkan Tombol Back</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                                <strong>⚠️ Peringatan:</strong>
+                                <p style="margin: 5px 0 0 0; color: #856404;">
+                                    Saat ujian dikunci, siswa TIDAK BISA keluar dari aplikasi sampai waktu selesai kecuali dengan password darurat.
+                                </p>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary" style="flex: 1;">
+                                    💾 Simpan Konfigurasi
+                                </button>
+                                <button type="button" class="btn btn-secondary" onclick="loadExamConfig()">
+                                    🔄 Reset
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Current Timer (if exam is active) -->
+                    <div id="examTimer" style="display: none; background: #d4edda; border-left: 4px solid #28a745; padding: 20px; border-radius: 10px; margin-top: 20px;">
+                        <h4 style="margin: 0 0 10px 0; color: #155724;">⏳ Ujian Sedang Berlangsung</h4>
+                        <p style="margin: 0; font-size: 24px; font-weight: bold; color: #155724;" id="timeRemaining">--:--:--</p>
+                    </div>
+                </div>
             </div>
 
             <!-- Sessions Tab -->
@@ -502,12 +595,221 @@
             event.target.classList.add('active');
             document.getElementById(`${tab}-tab`).classList.add('active');
 
-            if (tab === 'sessions') {
+            if (tab === 'examlock') {
+                loadExamConfig();
+            } else if (tab === 'sessions') {
                 loadActiveSessions();
             } else if (tab === 'logs') {
                 loadLogs();
             }
         }
+
+        // ==================== EXAM LOCK MANAGEMENT ====================
+
+        let examTimerInterval = null;
+
+        // Load exam configuration
+        async function loadExamConfig() {
+            try {
+                const response = await fetch(`${API_URL}/exam-config`);
+                const result = await response.json();
+
+                if (result.success) {
+                    const config = result.data;
+                    
+                    // Populate form
+                    document.getElementById('examName').value = config.examName || '';
+                    document.getElementById('emergencyPassword').value = config.emergencyPassword || '';
+                    document.getElementById('allowRefresh').checked = config.allowRefresh || false;
+                    document.getElementById('allowBack').checked = config.allowBack || false;
+                    
+                    // Format datetime for input
+                    if (config.startTime) {
+                        document.getElementById('startTime').value = formatDateTimeLocal(config.startTime);
+                    }
+                    if (config.endTime) {
+                        document.getElementById('endTime').value = formatDateTimeLocal(config.endTime);
+                    }
+                    
+                    // Update status display
+                    updateExamStatus(config);
+                    
+                    // Start timer if exam is active
+                    if (config.isActive) {
+                        startExamTimer(config.endTime);
+                    } else {
+                        stopExamTimer();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading exam config:', error);
+                alert('❌ Gagal memuat konfigurasi ujian');
+            }
+        }
+
+        // Update exam status display
+        function updateExamStatus(config) {
+            const statusText = document.getElementById('examStatusText');
+            const lockBtn = document.getElementById('quickLockBtn');
+            
+            if (config.isActive) {
+                statusText.innerHTML = `🔴 <strong>UJIAN SEDANG BERLANGSUNG</strong><br>
+                    <small>${config.examName}</small><br>
+                    <small>Mulai: ${formatDateTime(config.startTime)} | Selesai: ${formatDateTime(config.endTime)}</small>`;
+                lockBtn.innerHTML = '🔓 Buka Kunci';
+                lockBtn.style.background = '#f56565';
+                lockBtn.style.color = 'white';
+            } else if (config.isLocked) {
+                statusText.innerHTML = `🟡 <strong>UJIAN TERJADWAL (TERKUNCI)</strong><br>
+                    <small>${config.examName}</small><br>
+                    <small>Mulai: ${formatDateTime(config.startTime)} | Selesai: ${formatDateTime(config.endTime)}</small>`;
+                lockBtn.innerHTML = '🔓 Buka Kunci';
+                lockBtn.style.background = 'white';
+                lockBtn.style.color = '#667eea';
+            } else {
+                statusText.innerHTML = `🟢 <strong>UJIAN TIDAK TERKUNCI</strong><br>
+                    <small>Siswa dapat keluar dari aplikasi kapan saja</small>`;
+                lockBtn.innerHTML = '🔒 Kunci Ujian';
+                lockBtn.style.background = 'white';
+                lockBtn.style.color = '#667eea';
+            }
+        }
+
+        // Quick toggle lock/unlock
+        async function quickToggleLock() {
+            try {
+                const response = await fetch(`${API_URL}/exam-config`);
+                const result = await response.json();
+                const currentLock = result.data.isLocked;
+                
+                const action = currentLock ? 'unlock' : 'lock';
+                const confirmMsg = currentLock 
+                    ? 'Yakin ingin MEMBUKA KUNCI ujian?\n\nSiswa akan bisa keluar dari aplikasi.'
+                    : 'Yakin ingin MENGUNCI ujian?\n\nSiswa TIDAK BISA keluar dari aplikasi sampai waktu selesai.';
+                
+                if (!confirm(confirmMsg)) return;
+                
+                const lockResponse = await fetch(`${API_URL}/exam-lock`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action })
+                });
+                
+                const lockResult = await lockResponse.json();
+                
+                if (lockResult.success) {
+                    alert(`✅ ${lockResult.message}`);
+                    loadExamConfig();
+                }
+            } catch (error) {
+                console.error('Error toggling lock:', error);
+                alert('❌ Gagal mengubah status kunci');
+            }
+        }
+
+        // Save exam configuration
+        document.getElementById('examConfigForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            try {
+                const formData = {
+                    isLocked: true,  // Auto lock when saving
+                    examName: document.getElementById('examName').value,
+                    startTime: new Date(document.getElementById('startTime').value).toISOString(),
+                    endTime: new Date(document.getElementById('endTime').value).toISOString(),
+                    emergencyPassword: document.getElementById('emergencyPassword').value,
+                    allowRefresh: document.getElementById('allowRefresh').checked,
+                    allowBack: document.getElementById('allowBack').checked
+                };
+                
+                // Validate password length
+                if (formData.emergencyPassword.length < 6) {
+                    alert('❌ Password darurat minimal 6 karakter!');
+                    return;
+                }
+                
+                const response = await fetch(`${API_URL}/exam-config`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    alert('✅ ' + result.message + '\n\n🔒 Ujian otomatis dikunci!');
+                    loadExamConfig();
+                } else {
+                    alert('❌ ' + result.message);
+                }
+            } catch (error) {
+                console.error('Error saving exam config:', error);
+                alert('❌ Gagal menyimpan konfigurasi');
+            }
+        });
+
+        // Start exam timer
+        function startExamTimer(endTime) {
+            stopExamTimer(); // Clear existing timer
+            
+            document.getElementById('examTimer').style.display = 'block';
+            
+            examTimerInterval = setInterval(() => {
+                const now = new Date();
+                const end = new Date(endTime);
+                const diff = end - now;
+                
+                if (diff <= 0) {
+                    document.getElementById('timeRemaining').textContent = 'UJIAN SELESAI';
+                    document.getElementById('examTimer').style.background = '#f8d7da';
+                    document.getElementById('examTimer').style.borderColor = '#dc3545';
+                    stopExamTimer();
+                    loadExamConfig(); // Reload to update status
+                } else {
+                    const hours = Math.floor(diff / 3600000);
+                    const minutes = Math.floor((diff % 3600000) / 60000);
+                    const seconds = Math.floor((diff % 60000) / 1000);
+                    
+                    document.getElementById('timeRemaining').textContent = 
+                        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')} tersisa`;
+                }
+            }, 1000);
+        }
+
+        // Stop exam timer
+        function stopExamTimer() {
+            if (examTimerInterval) {
+                clearInterval(examTimerInterval);
+                examTimerInterval = null;
+            }
+            document.getElementById('examTimer').style.display = 'none';
+        }
+
+        // Utility: Format datetime for datetime-local input
+        function formatDateTimeLocal(isoString) {
+            if (!isoString) return '';
+            const date = new Date(isoString);
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
+        // Utility: Format datetime for display
+        function formatDateTime(isoString) {
+            if (!isoString) return '-';
+            return new Date(isoString).toLocaleString('id-ID', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // ==================== END EXAM LOCK MANAGEMENT ====================
 
         // Load statistics
         async function loadStats() {

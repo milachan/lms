@@ -278,6 +278,7 @@
         let selectedStudent = null;
         let currentSessionId = null;
         let sessionCheckInterval = null;
+        let examConfig = null;
 
         // Generate unique device ID (persistent)
         function getDeviceId() {
@@ -297,6 +298,7 @@
 
         // Load students on page load
         document.addEventListener('DOMContentLoaded', () => {
+            loadExamConfig();
             loadStudents();
 
             // Search functionality
@@ -304,6 +306,134 @@
                 filterStudents(e.target.value);
             });
         });
+
+        // ==================== EXAM LOCK ====================
+
+        // Load exam configuration
+        async function loadExamConfig() {
+            try {
+                const response = await fetch(`${API_URL}/exam-config`);
+                const result = await response.json();
+
+                if (result.success) {
+                    examConfig = result.data;
+                    
+                    // If exam is active, prevent exit
+                    if (examConfig.isActive) {
+                        initExamLock();
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading exam config:', error);
+            }
+        }
+
+        // Initialize exam lock - disable back button and refresh
+        function initExamLock() {
+            console.log('🔒 Exam lock activated');
+            
+            // Disable back button
+            if (!examConfig.allowBack) {
+                window.history.pushState(null, '', window.location.href);
+                window.addEventListener('popstate', preventBack);
+            }
+            
+            // Disable refresh
+            if (!examConfig.allowRefresh) {
+                window.addEventListener('beforeunload', preventRefresh);
+            }
+            
+            // Disable right click
+            document.addEventListener('contextmenu', e => e.preventDefault());
+            
+            // Disable F5, Ctrl+R, Ctrl+W, etc
+            document.addEventListener('keydown', preventShortcuts);
+        }
+
+        // Prevent back button
+        function preventBack(e) {
+            window.history.pushState(null, '', window.location.href);
+            
+            const password = prompt('🔒 UJIAN SEDANG BERLANGSUNG\\n\\nAnda tidak dapat keluar sebelum waktu selesai.\\n\\nMasukkan password darurat jika ada masalah:');
+            
+            if (password) {
+                verifyEmergencyPassword(password);
+            }
+        }
+
+        // Prevent refresh
+        function preventRefresh(e) {
+            e.preventDefault();
+            e.returnValue = '🔒 Ujian sedang berlangsung. Yakin ingin refresh?';
+            return e.returnValue;
+        }
+
+        // Prevent keyboard shortcuts
+        function preventShortcuts(e) {
+            // F5 or Ctrl+R (Refresh)
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+                if (!examConfig.allowRefresh) {
+                    e.preventDefault();
+                    alert('🔒 Refresh dinonaktifkan selama ujian berlangsung.');
+                }
+            }
+            
+            // Ctrl+W (Close tab)
+            if (e.ctrlKey && e.key === 'w') {
+                e.preventDefault();
+                alert('🔒 Anda tidak dapat menutup tab selama ujian berlangsung.');
+            }
+            
+            // Alt+F4 (Close window)
+            if (e.altKey && e.key === 'F4') {
+                e.preventDefault();
+                alert('🔒 Anda tidak dapat keluar selama ujian berlangsung.');
+            }
+            
+            // Ctrl+Q (Quit)
+            if (e.ctrlKey && e.key === 'q') {
+                e.preventDefault();
+                alert('🔒 Anda tidak dapat keluar selama ujian berlangsung.');
+            }
+        }
+
+        // Verify emergency password
+        async function verifyEmergencyPassword(password) {
+            try {
+                const response = await fetch(`${API_URL}/verify-emergency-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.verified) {
+                    alert('✅ Password darurat benar.\\n\\nAnda akan dikeluarkan dari aplikasi.');
+                    
+                    // Logout first
+                    await logout();
+                    
+                    // Remove event listeners
+                    window.removeEventListener('popstate', preventBack);
+                    window.removeEventListener('beforeunload', preventRefresh);
+                    document.removeEventListener('keydown', preventShortcuts);
+                    
+                    // Allow exit
+                    window.history.back();
+                } else {
+                    alert('❌ Password darurat salah!\\n\\nAnda tetap tidak bisa keluar.');
+                    // Push state again to prevent exit
+                    window.history.pushState(null, '', window.location.href);
+                }
+            } catch (error) {
+                console.error('Error verifying password:', error);
+                alert('❌ Gagal memverifikasi password.');
+                window.history.pushState(null, '', window.location.href);
+            }
+        }
+
+        // ==================== END EXAM LOCK ====================
 
         // Load students from API
         async function loadStudents() {
